@@ -36,9 +36,9 @@ typedef struct {
 
 // Definición de pines
 #define LED_LEFT_PIN    5
-#define LED_RIGHT_PIN   6
+#define LED_RIGHT_PIN   1
 #define BUTTON_LEFT_PIN 13
-#define BUTTON_RIGHT_PIN 14
+#define BUTTON_RIGHT_PIN 10
 
 #define BUTTON_IS_PRESSED(pin) (!(GPIOC->IDR & (1 << pin)))
 #define TOGGLE_LED(pin) (GPIOA->ODR ^= (1 << pin))
