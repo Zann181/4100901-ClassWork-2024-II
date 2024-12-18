@@ -16,14 +16,34 @@
 #define GPIOA ((GPIO_t *)0x48000000) // Base address of GPIOA
 #define GPIOC ((GPIO_t *)0x48000800) // Base address of GPIOC
 
-#define LED_PIN 5 // Pin 5 of GPIOA
-#define BUTTON_PIN 13 // Pin 13 of GPIOC
+#define LED_PIN 6 // Pin 5 of GPIOA
+#define BUTTON_PIN 8 // Pin 13 of GPIOC
+
+#define LED_LEFT_PIN    5
+#define LED_RIGHT_PIN   1
+#define BUTTON_LEFT_PIN 13
+#define BUTTON_RIGHT_PIN 10
+
+
 
 #define BUTTON_IS_PRESSED()    (!(GPIOC->IDR & (1 << BUTTON_PIN)))
 #define BUTTON_IS_RELEASED()   (GPIOC->IDR & (1 << BUTTON_PIN))
+
+#define BUTTON_LEFT_IS_PRESSED()     (!(GPIOC->IDR & (1 << BUTTON_LEFT_PIN)))
+#define BUTTON_RIGHT_IS_PRESSED()    (!(GPIOC->IDR & (1 << BUTTON_RIGHT_PIN)))
+#define BUTTON_IS_LEFTRELEASED()   (GPIOC->IDR & (1 << BUTTON_PIN))
+#define BUTTON_IS_RELEASED()   (GPIOC->IDR & (1 << BUTTON_PIN))
+
+#define TOGGLE_LED_LEFT()      (GPIOA->ODR ^= (1 << LED_LEFT_PIN))
+#define TOGGLE_LED_RIGHT()     (GPIOA->ODR ^= (1 << LED_RIGHT_PIN))
+
+
 #define TOGGLE_LED()           (GPIOA->ODR ^= (1 << LED_PIN))
 
 volatile uint8_t button_pressed = 0; // Flag to indicate button press
+
+volatile uint8_t button_left_pressed = 0; 
+volatile uint8_t button_right_pressed = 0; 
 
 void configure_gpio_for_usart() {
     // Enable GPIOA clock
@@ -60,30 +80,58 @@ void init_gpio_pin(GPIO_t *GPIOx, uint8_t pin, uint8_t mode)
 
 void configure_gpio(void)
 {
-    *RCC_AHB2ENR |= (1 << 0) | (1 << 2); // Enable clock for GPIOA and GPIOC
+    // Habilitar el reloj para GPIOA y GPIOC
+    *RCC_AHB2ENR |= (1 << 0) | (1 << 2); // bit0 = GPIOA, bit2 = GPIOC
 
-    // Enable clock for SYSCFG
+    // Habilitar SYSCFG
     *RCC_APB2ENR |= (1 << 0); // RCC_APB2ENR_SYSCFGEN
 
-    // Configure SYSCFG EXTICR to map EXTI13 to PC13
-    SYSCFG->EXTICR[3] &= ~(0xF << 4); // Clear bits for EXTI13
-    SYSCFG->EXTICR[3] |= (0x2 << 4);  // Map EXTI13 to Port C
+    // ----- Configuración del botón izquierdo (PC13) -----
+    // Asignar EXTI13 a PC13
+    SYSCFG->EXTICR[3] &= ~(0xF << 4); // Limpia bits para EXTI13
+    SYSCFG->EXTICR[3] |=  (0x2 << 4); // 0x2 = Puerto C
 
-    // Configure EXTI13 for falling edge trigger
-    EXTI->FTSR1 |= (1 << BUTTON_PIN);  // Enable falling trigger
-    EXTI->RTSR1 &= ~(1 << BUTTON_PIN); // Disable rising trigger
+    // EXTI13 flanco de bajada
+    EXTI->FTSR1 |=  (1 << BUTTON_LEFT_PIN);
+    EXTI->RTSR1 &= ~(1 << BUTTON_LEFT_PIN);
 
-    // Unmask EXTI13
-    EXTI->IMR1 |= (1 << BUTTON_PIN);
+    // Habilitar interrupción para EXTI13
+    EXTI->IMR1 |= (1 << BUTTON_LEFT_PIN);
 
-    init_gpio_pin(GPIOA, LED_PIN, 0x1); // Set LED pin as output
-    init_gpio_pin(GPIOC, BUTTON_PIN, 0x0); // Set BUTTON pin as input
+    // Inicializar LED izquierdo (PA5) como salida
+    init_gpio_pin(GPIOA, LED_LEFT_PIN, 0x1);
+    // Inicializar botón izquierdo (PC13) como entrada
+    init_gpio_pin(GPIOC, BUTTON_LEFT_PIN, 0x0);
 
-    // Enable EXTI15_10 interrupt
+    // ----- Configuración del botón derecho (PC10) -----
+    // Asignar EXTI10 a PC10
+    // EXTI10 se configura en EXTICR[2] (cada registro EXTICR controla 4 líneas de EXTI).
+    // EXTI8-11 se mapean en EXTICR[2], EXTI10 se ubica en los bits [11:8].
+    SYSCFG->EXTICR[2] &= ~(0xF << 8);  
+    SYSCFG->EXTICR[2] |=  (0x2 << 8);  // 0x2 = Puerto C
+
+    // EXTI10 flanco de bajada
+    EXTI->FTSR1 |=  (1 << BUTTON_RIGHT_PIN);
+    EXTI->RTSR1 &= ~(1 << BUTTON_RIGHT_PIN);
+
+    // Habilitar interrupción para EXTI10
+    EXTI->IMR1 |= (1 << BUTTON_RIGHT_PIN);
+
+    // Inicializar LED derecho (PA1) como salida
+    init_gpio_pin(GPIOA, LED_RIGHT_PIN, 0x1);
+    // Inicializar botón derecho (PC10) como entrada
+    init_gpio_pin(GPIOC, BUTTON_RIGHT_PIN, 0x0);
+
+    // Habilitar interrupciones EXTI15_10 en NVIC
+    // El vector EXTI15_10 cubre EXTI líneas 10 a 15, por lo tanto ambas interrupciones (botón izquierdo y derecho) entran por aquí.
     *NVIC_ISER1 |= (1 << (EXTI15_10_IRQn - 32));
 
+    // Configurar GPIO para USART (si es necesario)
     configure_gpio_for_usart();
 }
+
+
+
 
 uint8_t gpio_button_is_pressed(void)
 {
@@ -95,10 +143,45 @@ void gpio_toggle_led(void)
     TOGGLE_LED();
 }
 
+
+uint8_t gpio_button_left_is_pressed(void)
+{
+    return BUTTON_LEFT_IS_PRESSED();
+}
+
+uint8_t gpio_button_right_is_pressed(void)
+{
+    return BUTTON_RIGHT_IS_PRESSED();
+}
+
+void gpio_toggle_led_left(void)
+{
+    TOGGLE_LED_LEFT();
+}
+
+void gpio_toggle_led_right(void)
+{
+    TOGGLE_LED_RIGHT();
+}
+
 void EXTI15_10_IRQHandler(void)
 {
+    // Verificar si la interrupción proviene del botón izquierdo
+    if (EXTI->PR1 & (1 << BUTTON_LEFT_PIN)) {
+        EXTI->PR1 = (1 << BUTTON_LEFT_PIN); // Limpiar el bit pendiente
+        button_left_pressed = 1;            // Establecer bandera para botón izquierdo
+    }
+
+    // Verificar si la interrupción proviene del botón derecho
+    if (EXTI->PR1 & (1 << BUTTON_RIGHT_PIN)) {
+        EXTI->PR1 = (1 << BUTTON_RIGHT_PIN); // Limpiar el bit pendiente
+        button_right_pressed = 1;            // Establecer bandera para botón derecho
+    }
+
     if (EXTI->PR1 & (1 << BUTTON_PIN)) {
         EXTI->PR1 = (1 << BUTTON_PIN); // Clear pending bit
         button_pressed = 1; // Set button pressed flag
     }
+
 }
+

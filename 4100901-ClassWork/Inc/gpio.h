@@ -38,8 +38,22 @@ typedef struct {
 
 } GPIO_t;
 
+// Variables globales para eventos de botones
+extern volatile uint8_t button_pressed;
+extern volatile uint8_t button_left_pressed;
+extern volatile uint8_t button_right_pressed;
+
+
 void init_gpio_pin(GPIO_t *GPIOx, uint8_t pin, uint8_t mode);
 void configure_gpio(void);
 
 uint8_t gpio_button_is_pressed(void);
 void gpio_toggle_led(void);
+
+
+// Funciones adicionales para botón y LED izquierdo/derecho
+uint8_t gpio_button_left_is_pressed(void);
+uint8_t gpio_button_right_is_pressed(void);
+
+void gpio_toggle_led_left(void);
+void gpio_toggle_led_right(void);
