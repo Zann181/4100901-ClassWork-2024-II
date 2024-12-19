@@ -46,4 +46,3 @@ int main(void)
         // TODO: Run the FSM here       
     }
 }
-
